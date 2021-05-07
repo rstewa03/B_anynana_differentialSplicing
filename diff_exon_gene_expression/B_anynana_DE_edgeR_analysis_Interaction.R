@@ -1,3 +1,10 @@
+#' ---
+#' title: "B. anynana differential expression"
+#' output: html_document
+#' author: "Rachel Steward"
+#' date: '2021-05-07'
+#' ---
+
 setwd("/mnt/griffin/racste/B_anynana/diff_expr/edgeR")
 
 library(edgeR)
