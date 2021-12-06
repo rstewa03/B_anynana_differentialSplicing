@@ -1,0 +1,1 @@
+The main script is Bany_AS_clean_for_paper_11062021.sh. Four slurm scripts were run on the Puhti cluster. Finally, two R scripts were used to 1) calculate per-exon pi from the angsd output, which was per-site; 2) combine the per-exon estimates to per-gene estimates (length-weighted average).
