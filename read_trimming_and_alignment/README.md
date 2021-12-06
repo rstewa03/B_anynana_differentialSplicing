@@ -1,8 +1,8 @@
 # Bicyclus anynana SRR read cleaning and alignment#
 
-updated 28 May 2020
+updated 6 Dec 2021
 
-Steward, R.A., Oostra, V., Wheat, C.W. In prep. 
+Steward, R.A., de Jong, M., Oostra, V., Wheat, C.W. 
 
 ***************************************
 
