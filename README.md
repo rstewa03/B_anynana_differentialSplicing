@@ -15,5 +15,6 @@ Bash and R scripts for all analyses generating lists of differentially spliced a
 * Differential splicing (i.e. exon expression) analysis and differential expression analysis in edgeR
 * Differential splicing analysis in rMATS
 * Gene set enrichment analysis
+* Calculating population genomic parameters (pi, omega)
 
 Data necessary to perform subsequent analyses will be published with the article.
