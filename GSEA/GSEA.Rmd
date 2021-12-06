@@ -1,0 +1,791 @@
+---
+title: "Bany_GSEA"
+author: "Rachel Steward"
+date: "9/14/2021"
+output: html_document
+---
+
+```{r setup, echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+list.of.packages <- c("tidyverse", 
+                      "ggpubr",
+                      "ggsci",
+                      "ComplexHeatmap", 
+                      "circlize",
+                      "simplifyEnrichment",
+                      "grid")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+new.packages
+if(length(new.packages)) install.packages(new.packages)
+
+library(tidyverse)
+library(ggpubr)
+library(ComplexHeatmap)
+library(ggsci)
+library(circlize)
+library(simplifyEnrichment)
+library(grid)
+
+
+mypal_gsea<- c("#7876B1","#0072B5","#BC3C29", "white")
+
+```
+
+## Prepare dataframes and lists from eggNOG --> topGO --> REVIGO output (BP)
+
+
+```{r, echo = F, message=F, warning = F } 
+
+
+GOterm_Upset_list <- list()
+
+files = list.files("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_S/", pattern = "BP.GSEA_result_parentchild.REVIGO.tsv")
+for ( i in 1:length(files)){
+  temp = read_tsv(paste0("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_S/", files[i]), col_names = c("GOterm", "P_value")) %>% 
+    mutate(log10_P = 0-log10(P_value), geneset = gsub(".h", "", str_sub(files[i], 1, 9))) %>% 
+    arrange(log10_P) %>% filter(P_value <0.05)
+    GOterm_Upset_list[[i]] <- temp$GOterm
+  names(GOterm_Upset_list)[i] <- str_split(files[i], pattern = "_", n = 3)[[1]][2]
+}
+files = list.files("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_F/", pattern = "BP.GSEA_result_parentchild.REVIGO.tsv")
+
+for ( i in 1:length(files)){
+  temp = read_tsv(paste0("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_F/", files[i]), col_names = c("GOterm", "P_value")) %>% 
+    mutate(log10_P = 0-log10(P_value), geneset = gsub(".h", "", str_sub(files[i], 1, 9))) %>% 
+    arrange(log10_P) %>% filter(P_value <0.05)
+    GOterm_Upset_list[[i+6]] <- temp$GOterm
+  names(GOterm_Upset_list)[i+6] <- str_split(files[i], pattern = "_", n = 3)[[1]][2]
+}
+files = list.files("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_I/", pattern = "BP.GSEA_result_parentchild.REVIGO.tsv")
+
+for ( i in 1:length(files)){
+  temp = read_tsv(paste0("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_I/", files[i]), col_names = c("GOterm", "P_value")) %>% 
+    mutate(log10_P = 0-log10(P_value), geneset = gsub(".h", "", str_sub(files[i], 1, 9))) %>% 
+    arrange(log10_P) %>% filter(P_value <0.05)
+    GOterm_Upset_list[[i+12]] <- temp$GOterm
+  names(GOterm_Upset_list)[i+12] <- str_split(files[i], pattern = "_", n = 3)[[1]][2]
+}
+
+summary(GOterm_Upset_list)
+```
+## Upset plots 
+
+```{r}
+gseaUpSet <- function(m, ...){
+  cs = comb_size(m)
+  topAnno = HeatmapAnnotation( 
+    "Intersections" = anno_barplot(cs, gp = gpar(fill = c("gray", "gray", "gray", mypal_gsea[c(2,1,3)])), 
+                                   height = unit(3, "cm"), ylim = c(0,max(cs)+100 ), 
+                                   axis_param = list(gp = gpar(fontsize = 10)), 
+                                   border = FALSE),
+    annotation_name_side = "left",
+    annotation_label = gt_render(c("Intersections")),
+    gap = unit(2, "mm"))
+  rightAnno =  upset_right_annotation(
+    m,
+    axis_param = list( labels_rot = 0),
+    width = unit(2, "cm"),
+    annotation_label = gt_render(c("Set")),
+    gp = gpar(fill = mypal_gsea[c(2,1,3)]))
+  ups = UpSet(m, set_order = c( "DS","DEDS", "DE"), top_annotation = topAnno, right_annotation = rightAnno)
+  ht = draw(ups)
+  od = column_order(ht)
+  decorate_annotation("Intersections", {
+    grid.text(cs[od], x = seq_along(cs), y = unit(cs[od], "native") + unit(2, "pt"),
+              default.units = "native", just = c("bottom"),
+              gp = gpar(fontsize = 10, col = "#404040"), rot = 0)
+  })
+  
+  return(invisible(NULL))
+}
+GOterm_comb_mat = normalize_comb_mat(list(ab_season_matrix = make_comb_mat(GOterm_Upset_list[c(1:3)]), # abdomen ds effects plot
+                                          th_season_matrix = make_comb_mat(GOterm_Upset_list[c(4:6)]),
+                                          ab_family_matrix = make_comb_mat(GOterm_Upset_list[c(7:9)]),
+                                          th_family_matrix = make_comb_mat(GOterm_Upset_list[c(10:12)]),
+                                          ab_sxf_matrix = make_comb_mat(GOterm_Upset_list[c(13:14)]),
+                                          th_sxf_matrix = make_comb_mat(GOterm_Upset_list[c(15:16)])))
+knitr::kable(sapply(GOterm_comb_mat, comb_size), caption = "Combination matrix of GO terms (position 1 = DE, 2 = DEDS, 3=DS)")
+
+
+```
+
+```{r, echo = F, message=F, warning = F} 
+gsea_BPUpset_plots <- list()
+gsea_BPUpset_plots[[1]] <- gseaUpSet(GOterm_comb_mat$ab_season_matrix)
+gsea_BPUpset_plots[[2]] <- gseaUpSet(GOterm_comb_mat$th_season_matrix)
+gsea_BPUpset_plots[[3]] <- gseaUpSet(GOterm_comb_mat$ab_family_matrix)
+gsea_BPUpset_plots[[4]] <- gseaUpSet(GOterm_comb_mat$th_family_matrix)
+
+```
+
+```{r, echo = F, message=F, warning = F} 
+gsea_BPEuler_plots <- list()
+gsea_BPEuler_plots[[1]] <- plot(eulerr::euler(GOterm_Upset_list[c(1:3)]), quantities = TRUE, fills = adjustcolor(mypal_gsea[c(2,1,3)], alpha = 0.75), labels = c("DE only", "DE & DS", "DS only"))
+gsea_BPEuler_plots[[2]] <-   plot(eulerr::euler(GOterm_Upset_list[c(4:6)]), quantities = TRUE, fills = adjustcolor(mypal_gsea[c(2,1,3)], alpha = 0.75), labels =  c("DE only", "DE & DS", "DS only"))
+gsea_BPEuler_plots[[3]] <-   plot(eulerr::euler(GOterm_Upset_list[c(7:9)]), quantities = TRUE, fills = adjustcolor(mypal_gsea[c(2,1,3)], alpha = 0.75), labels = c("DE only", "DE & DS", "DS only"))
+gsea_BPEuler_plots[[4]] <-   plot(eulerr::euler(GOterm_Upset_list[c(10:12)]), quantities = TRUE, fills = adjustcolor(mypal_gsea[c(2,1,3)], alpha = 0.75), labels =  c("DE only", "DE & DS", "DS only"))
+gsea_BPEuler_plots[[5]] <-   plot(eulerr::euler(GOterm_Upset_list[c(13:14)]), quantities = TRUE, fills = adjustcolor(mypal_gsea[c(2,3)], alpha = 0.75), labels =  c("DE only",  "DS only"))
+gsea_BPEuler_plots[[6]] <-   plot(eulerr::euler(GOterm_Upset_list[c(15:16)]), quantities = TRUE, fills = adjustcolor(mypal_gsea[c(2,3)], alpha = 0.75), labels =  c("DE only",  "DS only"))
+save(gsea_BPEuler_plots,file = "Data_in/gsea_BPEuler_plots.Rdata")
+```
+
+```{r, echo = F, message=F, warning = F } 
+
+files = list.files("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_S/SemSpace/", 
+                   pattern = "S_BP.REVIGO.csv")
+topGO_BP <- data.frame(geneset = c( gsub("_B", "", str_sub(files[i], 1, 9))))
+top_genes_S <- list()
+
+for ( i in 1:length(files)){
+  temp = read_csv(paste0("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_S/SemSpace/", files[i])) %>% 
+    mutate(log10_P = 0-`log10 p-value`, geneset = gsub("_B", "", str_sub(files[i], 1, 9))) %>% 
+    arrange(log10_P) %>% 
+    dplyr::select(geneset, term_ID, description, log10_P, dispensability, eliminated)
+  topGO_BP <- full_join(topGO_BP, temp)
+  
+  top_genes_S[i]<- temp %>%filter(log10_P > -log10(0.05)) %>% dplyr::select(term_ID)
+  names(top_genes_S)[i] <- gsub("_B", "", str_sub(files[i], 1, 9))
+  
+}
+
+top_genes_F <- list()
+files = list.files("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_F/SemSpace/", 
+                   pattern = "F_BP.REVIGO.csv")
+for ( i in 1:length(files)){
+  temp = read_csv(paste0("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_F/SemSpace/", files[i])) %>%
+    mutate(log10_P = 0-Value, geneset = gsub("_B", "", str_sub(files[i], 1, 9))) %>% 
+    arrange(log10_P) %>% 
+    dplyr::select(geneset, term_ID=TermID, description=Name, log10_P, dispensability=Dispensability, eliminated=Eliminated)
+  topGO_BP <- full_join(topGO_BP, temp)
+  
+  top_genes_F[i]<- temp %>%filter(log10_P > -log10(0.05)) %>% dplyr::select(term_ID)
+  names(top_genes_F)[i] <- gsub("_B", "", str_sub(files[i], 1, 9))
+ 
+}
+
+top_genes_I <- list()
+files = list.files("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_I/SemSpace/", 
+                   pattern = "I_BP.REVIGO.csv")
+for ( i in 1:length(files)){
+  temp = read_csv(paste0("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_I/SemSpace/", files[i])) %>% 
+    mutate(log10_P = 0-`log10 p-value`, geneset = gsub("_B", "", str_sub(files[i], 1, 9))) %>% 
+    arrange(log10_P) %>% 
+    dplyr::select(geneset, term_ID, description, log10_P, dispensability, eliminated)
+  topGO_BP <- full_join(topGO_BP, temp)
+  
+  top_genes_I[i]<- temp %>%filter(log10_P > -log10(0.05)) %>% dplyr::select(term_ID)
+  names(top_genes_I)[i] <- gsub("_B", "", str_sub(files[i], 1, 9))
+  
+}
+
+
+term_IDs<- unique(topGO_BP$term_ID) %>% na.omit()
+functions_df <- data.frame(term_ID = c(), description = c()) 
+for (i in 1:length(term_IDs)){
+  temp <- topGO_BP %>% filter(term_ID == term_IDs[[i]]) %>% dplyr::select(term_ID, description) %>% head(1)
+  functions_df <- rbind(functions_df, temp)
+}
+
+write_csv(functions_df,"B_anynana_BP_enrichedFunctions.csv")
+topGO_BP_wide <- topGO_BP %>%  na.omit() %>%
+  dplyr::select(geneset,term_ID, log10_P) %>% 
+  left_join(functions_df) %>% 
+  mutate(GOterm = paste0(term_ID,"-", description)) %>% 
+  dplyr::select(term_ID, GOterm,geneset, log10_P) %>% 
+  pivot_wider(names_from = geneset, values_from = log10_P)
+
+summary(topGO_BP)
+summary(top_genes_S)
+summary(top_genes_F)
+summary(top_genes_I)
+summary(GOterm_Upset_list)
+summary(topGO_BP_wide)
+
+```
+
+
+
+## cluster the go terms
+```{r, echo = F, message=F, warning = F} 
+top_genes_all_BP <- unique(c(unlist(top_genes_S), unlist(top_genes_F), unlist(top_genes_I)))
+top_genes_mat_BP = GO_similarity(top_genes_all_BP, ont = "BP")
+top_genes_simp <- simplifyEnrichment(top_genes_mat_BP, method = "binary_cut")
+top_genes_simp_functions <- top_genes_simp %>% left_join(dplyr::select(topGO_BP_wide, id = term_ID, GOterm)) %>% 
+  mutate(GOterm_trunc = 
+           if_else(str_count(GOterm)<45, GOterm, paste0(str_sub(GOterm, 1, 42),"...")))
+top_genes_simp_list <- top_genes_simp_functions$cluster
+names(top_genes_simp_list) <- top_genes_simp_functions$GOterm_trunc
+write_tsv((top_genes_simp_functions %>% mutate(Type = "BP")),"B_anynana_GSEA_BP_top_simplifiedEnricment_GOterms.tsv")
+```
+```{r, echo = F, message=F, warning = F} 
+col_ramps <- list()
+col_ramps$DE_col_ramp<- colorRamp2(c(-1, 6), c("white", mypal_gsea[2]))
+col_ramps$DEDS_col_ramp<- colorRamp2(c(-1,6 ), c("white", mypal_gsea[1]))
+col_ramps$DS_col_ramp <- colorRamp2(c(-1, 6), c("white", mypal_gsea[3]))
+
+topGO_BP_wide_S_ab <- topGO_BP_wide[topGO_BP_wide$term_ID %in% unique(unlist(top_genes_S[1:3])),c(2:5)] %>% 
+  arrange(ab_DE_S, ab_DEDS_S, ab_DS_S) %>% 
+  mutate(GOterm_trunc = 
+           if_else(str_count(GOterm)<45, GOterm, paste0(str_sub(GOterm, 1, 42),"..."))) %>%
+  # str_sub(GOterm, 1, 10)) %>%
+  dplyr::select(-GOterm) %>%
+  column_to_rownames("GOterm_trunc") %>% 
+  as.matrix() 
+ab_S_ht <- list()
+for (i in 1:3){
+  ab_S_ht[[i]] <- Heatmap(topGO_BP_wide_S_ab[,i][names(topGO_BP_wide_S_ab[,i]) %in% names(top_genes_simp_list)], 
+                          na_col =mypal_gsea[4], col = col_ramps[[i]], 
+                          column_title = str_split(colnames(topGO_BP_wide_S_ab)[i], pattern = "_", n = 3)[[1]][2],
+                          row_split = top_genes_simp_list[names(top_genes_simp_list) %in% names(topGO_BP_wide_S_ab[,i])], 
+                          show_column_names = FALSE,
+                          row_title_gp = gpar(fontsize = 8),
+                          row_title_rot = 0,
+                          row_names_gp = gpar(fontsize = 6),
+                          show_heatmap_legend = FALSE,
+                          column_title_rot = 90,
+                          rect_gp = gpar(col = mypal_gsea[4], lwd = 1),
+                          cluster_rows = F)
+}
+
+topGO_BP_wide_S_th <- topGO_BP_wide[topGO_BP_wide$term_ID %in% unique(unlist(top_genes_S[4:6])),c(2,6,7,8)] %>% 
+  arrange(th_DE_S, th_DEDS_S, th_DS_S) %>% 
+  mutate(GOterm_trunc = 
+           if_else(str_count(GOterm)<45, GOterm, paste0(str_sub(GOterm, 1, 42),"..."))) %>%
+  # str_sub(GOterm, 1, 10)) %>%
+  dplyr::select(-GOterm) %>%
+  column_to_rownames("GOterm_trunc") %>% 
+  as.matrix() 
+th_S_ht <- list()
+for (i in 1:3){
+  th_S_ht[[i]] <- Heatmap(topGO_BP_wide_S_th[,i][names(topGO_BP_wide_S_th[,i]) %in% names(top_genes_simp_list)], 
+                          na_col =mypal_gsea[4], col = col_ramps[[i]], 
+                          column_title = str_split(colnames(topGO_BP_wide_S_th)[i], pattern = "_", n = 3)[[1]][2],
+                          row_split = top_genes_simp_list[names(top_genes_simp_list) %in% names(topGO_BP_wide_S_th[,i])], 
+                          show_column_names = FALSE,
+                          row_title_gp = gpar(fontsize = 8),
+                          row_title_rot = 0,
+                          row_names_gp = gpar(fontsize = 6),
+                          show_heatmap_legend = FALSE,
+                          column_title_rot = 90,
+                          rect_gp = gpar(col = mypal_gsea[4], lwd = 1),
+                          cluster_rows = F)
+}
+
+topGO_BP_wide_F_ab <- topGO_BP_wide[topGO_BP_wide$term_ID %in% unique(unlist(top_genes_F[1:3])),c(2,9,10,11)] %>% 
+  arrange(ab_DE_F, ab_DEDS_F, ab_DS_F) %>% 
+  mutate(GOterm_trunc = 
+           if_else(str_count(GOterm)<45, GOterm, paste0(str_sub(GOterm, 1, 42),"..."))) %>%
+  # str_sub(GOterm, 1, 10)) %>%
+  dplyr::select(-GOterm) %>%
+  column_to_rownames("GOterm_trunc") %>% 
+  as.matrix() 
+ab_F_ht <- list()
+for (i in 1:3){
+  ab_F_ht[[i]] <- Heatmap(topGO_BP_wide_F_ab[,i][names(topGO_BP_wide_F_ab[,i]) %in% names(top_genes_simp_list)], 
+                          na_col =mypal_gsea[4], col = col_ramps[[i]], 
+                          column_title = str_split(colnames(topGO_BP_wide_F_ab)[i], pattern = "_", n = 3)[[1]][2],
+                          show_column_names = FALSE,
+                          row_split = top_genes_simp_list[names(top_genes_simp_list) %in% names(topGO_BP_wide_F_ab[,i])], 
+                          row_title_gp = gpar(fontsize = 8),
+                          row_title_rot = 0,
+                          row_names_gp = gpar(fontsize = 6),
+                          show_heatmap_legend = FALSE,
+                          column_title_rot = 90,
+                          rect_gp = gpar(col = mypal_gsea[4], lwd = 1),
+                          cluster_rows = F)
+}
+
+topGO_BP_wide_F_th <- topGO_BP_wide[topGO_BP_wide$term_ID %in% unique(unlist(top_genes_F[4:6])),c(2,12,13,14)] %>% 
+  arrange(th_DE_F, th_DEDS_F, th_DS_F) %>% 
+  mutate(GOterm_trunc = 
+           if_else(str_count(GOterm)<45, GOterm, paste0(str_sub(GOterm, 1, 42),"..."))) %>%
+  # str_sub(GOterm, 1, 10)) %>%
+  dplyr::select(-GOterm) %>%
+  column_to_rownames("GOterm_trunc") %>% 
+  as.matrix() 
+th_F_ht <- list()
+for (i in 1:3){
+  th_F_ht[[i]] <- Heatmap(topGO_BP_wide_F_th[,i][names(topGO_BP_wide_F_th[,i]) %in% names(top_genes_simp_list)], 
+                          na_col =mypal_gsea[4], col = col_ramps[[i]], 
+                          column_title = str_split(colnames(topGO_BP_wide_F_th)[i], pattern = "_", n = 3)[[1]][2],
+                          show_column_names = FALSE,
+                          row_split = top_genes_simp_list[names(top_genes_simp_list) %in% names(topGO_BP_wide_F_th[,i])], 
+                          row_title_gp = gpar(fontsize = 8),
+                          row_title_rot = 0,
+                          row_names_gp = gpar(fontsize = 6),
+                          show_heatmap_legend = FALSE,
+                          column_title_rot = 90,
+                          rect_gp = gpar(col = mypal_gsea[4], lwd = 1),
+                          cluster_rows = F)
+}
+col_ramps_I <- col_ramps[c(1,3)]
+topGO_BP_wide_I_ab <- topGO_BP_wide[topGO_BP_wide$term_ID %in% unique(unlist(top_genes_I[1:2])),c(2,15,16)] %>% 
+  arrange(ab_DE_I, ab_DS_I) %>% 
+  mutate(GOterm_trunc = 
+           if_else(str_count(GOterm)<45, GOterm, paste0(str_sub(GOterm, 1, 42),"..."))) %>%
+  # str_sub(GOterm, 1, 10)) %>%
+  dplyr::select(-GOterm) %>%
+  column_to_rownames("GOterm_trunc") %>% 
+  as.matrix() 
+ab_I_ht <- list()
+for (i in 1:2){
+  ab_I_ht[[i]] <- Heatmap(topGO_BP_wide_I_ab[,i][names(topGO_BP_wide_I_ab[,i]) %in% names(top_genes_simp_list)], 
+                          na_col =mypal_gsea[4], col = col_ramps_I[[i]], 
+                          column_title = str_split(colnames(topGO_BP_wide_I_ab)[i], pattern = "_", n = 3)[[1]][2],
+                          show_column_names = FALSE,
+                          row_split = top_genes_simp_list[names(top_genes_simp_list) %in% names(topGO_BP_wide_I_ab[,i])], 
+                          row_title_gp = gpar(fontsize = 8),
+                          row_title_rot = 0,
+                          row_names_gp = gpar(fontsize = 6),
+                          show_heatmap_legend = FALSE,
+                          column_title_rot = 90,
+                          rect_gp = gpar(col = mypal_gsea[4], lwd = 1),
+                          cluster_rows = F)
+}
+
+topGO_BP_wide_I_th <- topGO_BP_wide[topGO_BP_wide$term_ID %in% unique(unlist(top_genes_I[3:4])),c(2,17,18)] %>% 
+  arrange(th_DE_I, th_DS_I) %>% 
+  mutate(GOterm_trunc = 
+           if_else(str_count(GOterm)<45, GOterm, paste0(str_sub(GOterm, 1, 42),"..."))) %>%
+  # str_sub(GOterm, 1, 10)) %>%
+  dplyr::select(-GOterm) %>%
+  column_to_rownames("GOterm_trunc") %>% 
+  as.matrix() 
+th_I_ht <- list()
+for (i in 1:2){
+  th_I_ht[[i]] <- Heatmap(topGO_BP_wide_I_th[,i][names(topGO_BP_wide_I_th[,i]) %in% names(top_genes_simp_list)], 
+                          na_col =mypal_gsea[4], col = col_ramps_I[[i]], 
+                          column_title = str_split(colnames(topGO_BP_wide_I_th)[i], pattern = "_", n = 3)[[1]][2],
+                          show_column_names = FALSE,
+                          row_split = top_genes_simp_list[names(top_genes_simp_list) %in% names(topGO_BP_wide_I_th[,i])], 
+                          row_title_gp = gpar(fontsize = 8),
+                          row_title_rot = 0,
+                          row_names_gp = gpar(fontsize = 6),
+                          show_heatmap_legend = FALSE,
+                          column_title_rot = 90,
+                          rect_gp = gpar(col = mypal_gsea[4], lwd = 1),
+                          cluster_rows = F)
+}
+
+```
+
+
+```{r, echo = F, message = F, warning = F, fig.height = 10, fig.width = 2} 
+gsea_BPPval_plots <-  list()
+gsea_BPPval_plots[[1]] <- ab_S_ht[[1]] + ab_S_ht[[2]] + ab_S_ht[[3]]
+gsea_BPPval_plots[[2]] <- th_S_ht[[1]] + th_S_ht[[2]] + th_S_ht[[3]]
+
+gsea_BPPval_plots[[3]] <- ab_F_ht[[1]] + ab_F_ht[[2]] + ab_F_ht[[3]]
+gsea_BPPval_plots[[4]] <- th_F_ht[[1]] + th_F_ht[[2]] + th_F_ht[[3]]
+
+gsea_BPPval_plots[[5]] <-ab_I_ht[[1]] + ab_I_ht[[2]]
+gsea_BPPval_plots[[6]] <-th_I_ht[[1]] + th_I_ht[[2]]
+
+save(ab_S_ht, th_S_ht, ab_F_ht, th_F_ht, ab_I_ht, th_I_ht, file = "Data_in/B_anynana_GSEA_BP_heatmaps.Rdata")
+
+```
+
+```{r, echo = F, message=F, warning = F, fig.height = 25, fig.width = 10} 
+
+ggarrange(ggarrange(grid::grid.grabExpr(draw(gsea_BPPval_plots[[1]], ht_gap = unit(c(0.5,0.5), "mm"))), NULL,
+                                            ncol = 1, nrow = 2, heights = c(0.8,0.2)),
+         grid::grid.grabExpr(draw(gsea_BPPval_plots[[3]], ht_gap = unit(c(0.5,0.5), "mm"))), 
+          ggarrange(NULL, grid::grid.grabExpr(draw(gsea_BPPval_plots[[5]], ht_gap = unit(c(0.5,0.5), "mm"))), NULL, 
+                        ncol = 1, nrow = 3, heights = c(0.01, 0.12,0.86)),
+          ncol = 3, nrow = 1, widths = c(1, 1, 0.9), labels = "AUTO")
+
+ggsave("Figures/FigS3_GOoverlap_abdomen_BP.pdf", height = 35, width = 9)
+
+ggarrange(grid::grid.grabExpr(draw(gsea_BPPval_plots[[2]], ht_gap = unit(c(0.5,0.5), "mm"))), 
+          ggarrange(grid::grid.grabExpr(draw(gsea_BPPval_plots[[4]], ht_gap = unit(c(0.5,0.5), "mm"))), NULL, 
+                        ncol = 1, nrow = 2, heights = c(0.9,0.1)),
+          ggarrange(NULL, grid::grid.grabExpr(draw(gsea_BPPval_plots[[6]], ht_gap = unit(c(0.5,0.5), "mm"))), NULL, 
+                        ncol = 1, nrow = 3, heights = c(0.01, 0.12,0.86)),
+          ncol = 3, nrow = 1, widths = c(1, 1, 0.9), labels = "AUTO")
+
+ggsave("Figures/FigS4_GOoverlap_thorax_BP.pdf", height = 25, width = 9)
+
+```
+
+## Prepare dataframes and lists from eggNOG --> topGO --> REVIGO output (MF)
+
+```{r, echo = F, message=F, warning = F } 
+
+
+GOterm_Upset_list <- list()
+
+files = list.files("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_S/", pattern = "MF.GSEA_result_parentchild.REVIGO.tsv")
+for ( i in 1:length(files)){
+  temp = read_tsv(paste0("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_S/", files[i]), col_names = c("GOterm", "P_value")) %>% 
+    mutate(log10_P = 0-log10(P_value), geneset = gsub(".h", "", str_sub(files[i], 1, 9))) %>% 
+    arrange(log10_P) %>% filter(P_value <0.05)
+    GOterm_Upset_list[[i]] <- temp$GOterm
+  names(GOterm_Upset_list)[i] <- str_split(files[i], pattern = "_", n = 3)[[1]][2]
+}
+files = list.files("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_F/", pattern = "MF.GSEA_result_parentchild.REVIGO.tsv")
+
+for ( i in 1:length(files)){
+  temp = read_tsv(paste0("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_F/", files[i]), col_names = c("GOterm", "P_value")) %>% 
+    mutate(log10_P = 0-log10(P_value), geneset = gsub(".h", "", str_sub(files[i], 1, 9))) %>% 
+    arrange(log10_P) %>% filter(P_value <0.05)
+    GOterm_Upset_list[[i+6]] <- temp$GOterm
+  names(GOterm_Upset_list)[i+6] <- str_split(files[i], pattern = "_", n = 3)[[1]][2]
+}
+files = list.files("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_I/", pattern = "MF.GSEA_result_parentchild.REVIGO.tsv")
+
+for ( i in 1:length(files)){
+  temp = read_tsv(paste0("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_I/", files[i]), col_names = c("GOterm", "P_value")) %>% 
+    mutate(log10_P = 0-log10(P_value), geneset = gsub(".h", "", str_sub(files[i], 1, 9))) %>% 
+    arrange(log10_P) %>% filter(P_value <0.05)
+    GOterm_Upset_list[[i+12]] <- temp$GOterm
+  names(GOterm_Upset_list)[i+12] <- str_split(files[i], pattern = "_", n = 3)[[1]][2]
+}
+
+summary(GOterm_Upset_list)
+```
+## Upset plots 
+
+```{r}
+gseaUpSet <- function(m, ...){
+  cs = comb_size(m)
+  topAnno = HeatmapAnnotation( 
+    "Intersections" = anno_barplot(cs, gp = gpar(fill = c("gray", "gray", mypal_gsea[c(2,1,3)])), 
+                                   height = unit(3, "cm"), ylim = c(0,max(cs)+100 ), 
+                                   axis_param = list(gp = gpar(fontsize = 10)), 
+                                   border = FALSE),
+    annotation_name_side = "left",
+    annotation_label = gt_render(c("Intersections")),
+    gap = unit(2, "mm"))
+  rightAnno =  upset_right_annotation(
+    m,
+    axis_param = list( labels_rot = 0),
+    width = unit(2, "cm"),
+    annotation_label = gt_render(c("Set")),
+    gp = gpar(fill = mypal_gsea[c(2,1,3)]))
+  ups = UpSet(m, set_order = c( "DS","DEDS", "DE"), top_annotation = topAnno, right_annotation = rightAnno)
+  ht = draw(ups)
+  od = column_order(ht)
+  decorate_annotation("Intersections", {
+    grid.text(cs[od], x = seq_along(cs), y = unit(cs[od], "native") + unit(2, "pt"),
+              default.units = "native", just = c("bottom"),
+              gp = gpar(fontsize = 10, col = "#404040"), rot = 0)
+  })
+  
+  return(invisible(NULL))
+}
+GOterm_comb_mat = normalize_comb_mat(list(ab_season_matrix = make_comb_mat(GOterm_Upset_list[c(1:3)]), # abdomen ds effects plot
+                                          th_season_matrix = make_comb_mat(GOterm_Upset_list[c(4:6)]),
+                                          ab_family_matrix = make_comb_mat(GOterm_Upset_list[c(7:9)]),
+                                          th_family_matrix = make_comb_mat(GOterm_Upset_list[c(10:12)]),
+                                          ab_sxf_matrix = make_comb_mat(GOterm_Upset_list[c(13:14)]),
+                                          th_sxf_matrix = make_comb_mat(GOterm_Upset_list[c(15:16)])))
+knitr::kable(sapply(GOterm_comb_mat, comb_size), caption = "Combination matrix of GO terms (position 1 = DE, 2 = DEDS, 3=DS)")
+
+
+```
+
+```{r, echo = F, message=F, warning = F} 
+gsea_MFUpset_plots <- list()
+gsea_MFUpset_plots[[1]] <- gseaUpSet(GOterm_comb_mat$ab_season_matrix)
+gsea_MFUpset_plots[[2]] <- gseaUpSet(GOterm_comb_mat$th_season_matrix)
+gsea_MFUpset_plots[[3]] <- gseaUpSet(GOterm_comb_mat$ab_family_matrix)
+gsea_MFUpset_plots[[4]] <- gseaUpSet(GOterm_comb_mat$th_family_matrix)
+
+```
+
+```{r, echo = F, message=F, warning = F} 
+gsea_MFEuler_plots <- list()
+gsea_MFEuler_plots[[1]] <- plot(eulerr::euler(GOterm_Upset_list[c(1:3)]), quantities = TRUE, fills = adjustcolor(mypal_gsea[c(2,1,3)], alpha = 0.75), labels = c("DE only", "DE & DS", "DS only"))
+gsea_MFEuler_plots[[2]] <-   plot(eulerr::euler(GOterm_Upset_list[c(4:6)]), quantities = TRUE, fills = adjustcolor(mypal_gsea[c(2,1,3)], alpha = 0.75), labels =  c("DE only", "DE & DS", "DS only"))
+gsea_MFEuler_plots[[3]] <-   plot(eulerr::euler(GOterm_Upset_list[c(7:9)]), quantities = TRUE, fills = adjustcolor(mypal_gsea[c(2,1,3)], alpha = 0.75), labels = c("DE only", "DE & DS", "DS only"))
+gsea_MFEuler_plots[[4]] <-   plot(eulerr::euler(GOterm_Upset_list[c(10:12)]), quantities = TRUE, fills = adjustcolor(mypal_gsea[c(2,1,3)], alpha = 0.75), labels =  c("DE only", "DE & DS", "DS only"))
+gsea_MFEuler_plots[[5]] <-   plot(eulerr::euler(GOterm_Upset_list[c(13:14)]), quantities = TRUE, fills = adjustcolor(mypal_gsea[c(2,3)], alpha = 0.75), labels =  c("DE only",  "DS only"))
+gsea_MFEuler_plots[[6]] <-   plot(eulerr::euler(GOterm_Upset_list[c(15:16)]), quantities = TRUE, fills = adjustcolor(mypal_gsea[c(2,3)], alpha = 0.75), labels =  c("DE only",  "DS only"))
+
+save(gsea_MFEuler_plots,file = "Data_in/gsea_MFEuler_plots.Rdata")
+
+```
+
+```{r, echo = F, message=F, warning = F } 
+
+files = list.files("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_S/SemSpace/", 
+                   pattern = "S_MF.REVIGO.csv")
+topGO_MF <- data.frame(geneset = c( gsub("_M", "", str_sub(files[i], 1, 9))))
+top_genes_S <- list()
+
+for ( i in 1:length(files)){
+  temp = read_csv(paste0("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_S/SemSpace/", files[i])) %>% 
+    mutate(log10_P = 0-`log10 p-value`, geneset = gsub("_M", "", str_sub(files[i], 1, 9))) %>% 
+    arrange(log10_P) %>% 
+    dplyr::select(geneset, term_ID, description, log10_P, dispensability, eliminated)
+  topGO_MF <- full_join(topGO_MF, temp)
+  
+  top_genes_S[i]<- temp %>%filter(log10_P > -log10(0.05)) %>% dplyr::select(term_ID)
+  names(top_genes_S)[i] <- gsub("_M", "", str_sub(files[i], 1, 9))
+  
+}
+
+top_genes_F <- list()
+files = list.files("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_F/SemSpace/", 
+                   pattern = "F_MF.REVIGO.csv")
+for ( i in 1:length(files)){
+  temp = read_csv(paste0("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_F/SemSpace/", files[i])) %>%
+    mutate(log10_P = 0-Value, geneset = gsub("_M", "", str_sub(files[i], 1, 9))) %>% 
+    arrange(log10_P) %>% 
+    dplyr::select(geneset, term_ID=TermID, description=Name, log10_P, dispensability=Dispensability, eliminated=Eliminated)
+  topGO_MF <- full_join(topGO_MF, temp)
+  
+  top_genes_F[i]<- temp %>%filter(log10_P > -log10(0.05)) %>% dplyr::select(term_ID)
+  names(top_genes_F)[i] <- gsub("_M", "", str_sub(files[i], 1, 9))
+ 
+}
+
+top_genes_I <- list()
+files = list.files("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_I/SemSpace/", 
+                   pattern = "I_MF.REVIGO.csv")
+for ( i in 1:length(files)){
+  temp = read_csv(paste0("/Users/rachelsteward/OneDrive/B_anynana_altSplicing/PanicTime/genelists/REVIGO_I/SemSpace/", files[i])) %>% 
+    mutate(log10_P = 0-`log10 p-value`, geneset = gsub("_M", "", str_sub(files[i], 1, 9))) %>% 
+    arrange(log10_P) %>% 
+    dplyr::select(geneset, term_ID, description, log10_P, dispensability, eliminated)
+  topGO_MF <- full_join(topGO_MF, temp)
+  
+  top_genes_I[i]<- temp %>%filter(log10_P > -log10(0.05)) %>% dplyr::select(term_ID)
+  names(top_genes_I)[i] <- gsub("_M", "", str_sub(files[i], 1, 9))
+  
+}
+
+
+term_IDs<- unique(topGO_MF$term_ID) %>% na.omit()
+functions_df <- data.frame(term_ID = c(), description = c()) 
+for (i in 1:length(term_IDs)){
+  temp <- topGO_MF %>% filter(term_ID == term_IDs[[i]]) %>% dplyr::select(term_ID, description) %>% head(1)
+  functions_df <- rbind(functions_df, temp)
+}
+write_csv(functions_df,"B_anynana_MF_enrichedFunctions.csv")
+
+topGO_MF_wide <- topGO_MF %>%  na.omit() %>%
+  dplyr::select(geneset,term_ID, log10_P) %>% 
+  left_join(functions_df) %>% 
+  mutate(GOterm = paste0(term_ID,"-", description)) %>% 
+  dplyr::select(term_ID, GOterm,geneset, log10_P) %>% 
+  pivot_wider(names_from = geneset, values_from = log10_P)
+
+summary(topGO_MF)
+summary(top_genes_S)
+summary(top_genes_F)
+summary(top_genes_I)
+summary(topGO_MF_wide)
+
+```
+
+
+
+## cluster the go terms
+```{r, echo = F, message=F, warning = F} 
+top_genes_all <- unique(c(unlist(top_genes_S), unlist(top_genes_F), unlist(top_genes_I)))
+top_genes_mat = GO_similarity(top_genes_all, ont = "MF")
+top_genes_simp <- simplifyEnrichment(top_genes_mat, method = "binary_cut")
+top_genes_simp_functions <- top_genes_simp %>% left_join(dplyr::select(topGO_MF_wide, id = term_ID, GOterm)) %>% 
+  mutate(GOterm_trunc = 
+           if_else(str_count(GOterm)<45, GOterm, paste0(str_sub(GOterm, 1, 42),"...")))
+top_genes_simp_list <- top_genes_simp_functions$cluster
+names(top_genes_simp_list) <- top_genes_simp_functions$GOterm_trunc
+
+write_tsv((top_genes_simp_functions %>% mutate(Type = "MF")),"B_anynana_GSEA_MF_top_simplifiedEnricment_GOterms.tsv")
+
+```
+```{r, echo = F, message=F, warning = F} 
+col_ramps <- list()
+col_ramps$DE_col_ramp<- colorRamp2(c(-1, 6), c("white", mypal_gsea[2]))
+col_ramps$DEDS_col_ramp<- colorRamp2(c(-1,6 ), c("white", mypal_gsea[1]))
+col_ramps$DS_col_ramp <- colorRamp2(c(-1, 6), c("white", mypal_gsea[3]))
+
+topGO_MF_wide_S_ab <- topGO_MF_wide[topGO_MF_wide$term_ID %in% unique(unlist(top_genes_S[1:3])),c(2:5)] %>% 
+  arrange(ab_DE_S, ab_DEDS_S, ab_DS_S) %>% 
+  mutate(GOterm_trunc = 
+           if_else(str_count(GOterm)<45, GOterm, paste0(str_sub(GOterm, 1, 42),"..."))) %>%
+  # str_sub(GOterm, 1, 10)) %>%
+  dplyr::select(-GOterm) %>%
+  column_to_rownames("GOterm_trunc") %>% 
+  as.matrix() 
+ab_S_ht <- list()
+for (i in 1:3){
+  ab_S_ht[[i]] <- Heatmap(topGO_MF_wide_S_ab[,i][names(topGO_MF_wide_S_ab[,i]) %in% names(top_genes_simp_list)], 
+                          na_col =mypal_gsea[4], col = col_ramps[[i]], 
+                          column_title = str_split(colnames(topGO_MF_wide_S_ab)[i], pattern = "_", n = 3)[[1]][2],
+                          row_split = top_genes_simp_list[names(top_genes_simp_list) %in% names(topGO_MF_wide_S_ab[,i])], 
+                          show_column_names = FALSE,
+                          row_title_gp = gpar(fontsize = 8),
+                          row_title_rot = 0,
+                          row_names_gp = gpar(fontsize = 6),
+                          show_heatmap_legend = FALSE,
+                          column_title_rot = 90,
+                          rect_gp = gpar(col = mypal_gsea[4], lwd = 1),
+                          cluster_rows = F)
+}
+
+topGO_MF_wide_S_th <- topGO_MF_wide[topGO_MF_wide$term_ID %in% unique(unlist(top_genes_S[4:6])),c(2,6,7,8)] %>% 
+  arrange(th_DE_S, th_DEDS_S, th_DS_S) %>% 
+  mutate(GOterm_trunc = 
+           if_else(str_count(GOterm)<45, GOterm, paste0(str_sub(GOterm, 1, 42),"..."))) %>%
+  # str_sub(GOterm, 1, 10)) %>%
+  dplyr::select(-GOterm) %>%
+  column_to_rownames("GOterm_trunc") %>% 
+  as.matrix() 
+th_S_ht <- list()
+for (i in 1:3){
+  th_S_ht[[i]] <- Heatmap(topGO_MF_wide_S_th[,i][names(topGO_MF_wide_S_th[,i]) %in% names(top_genes_simp_list)], 
+                          na_col =mypal_gsea[4], col = col_ramps[[i]], 
+                          column_title = str_split(colnames(topGO_MF_wide_S_th)[i], pattern = "_", n = 3)[[1]][2],
+                          row_split = top_genes_simp_list[names(top_genes_simp_list) %in% names(topGO_MF_wide_S_th[,i])], 
+                          show_column_names = FALSE,
+                          row_title_gp = gpar(fontsize = 8),
+                          row_title_rot = 0,
+                          row_names_gp = gpar(fontsize = 6),
+                          show_heatmap_legend = FALSE,
+                          column_title_rot = 90,
+                          rect_gp = gpar(col = mypal_gsea[4], lwd = 1),
+                          cluster_rows = F)
+}
+
+topGO_MF_wide_F_ab <- topGO_MF_wide[topGO_MF_wide$term_ID %in% unique(unlist(top_genes_F[1:3])),c(2,9,10,11)] %>% 
+  arrange(ab_DE_F, ab_DEDS_F, ab_DS_F) %>% 
+  mutate(GOterm_trunc = 
+           if_else(str_count(GOterm)<45, GOterm, paste0(str_sub(GOterm, 1, 42),"..."))) %>%
+  # str_sub(GOterm, 1, 10)) %>%
+  dplyr::select(-GOterm) %>%
+  column_to_rownames("GOterm_trunc") %>% 
+  as.matrix() 
+ab_F_ht <- list()
+for (i in 1:3){
+  ab_F_ht[[i]] <- Heatmap(topGO_MF_wide_F_ab[,i][names(topGO_MF_wide_F_ab[,i]) %in% names(top_genes_simp_list)], 
+                          na_col =mypal_gsea[4], col = col_ramps[[i]], 
+                          column_title = str_split(colnames(topGO_MF_wide_F_ab)[i], pattern = "_", n = 3)[[1]][2],
+                          show_column_names = FALSE,
+                          row_split = top_genes_simp_list[names(top_genes_simp_list) %in% names(topGO_MF_wide_F_ab[,i])], 
+                          row_title_gp = gpar(fontsize = 8),
+                          row_title_rot = 0,
+                          row_names_gp = gpar(fontsize = 6),
+                          show_heatmap_legend = FALSE,
+                          column_title_rot = 90,
+                          rect_gp = gpar(col = mypal_gsea[4], lwd = 1),
+                          cluster_rows = F)
+}
+
+topGO_MF_wide_F_th <- topGO_MF_wide[topGO_MF_wide$term_ID %in% unique(unlist(top_genes_F[4:6])),c(2,12,13,14)] %>% 
+  arrange(th_DE_F, th_DEDS_F, th_DS_F) %>% 
+  mutate(GOterm_trunc = 
+           if_else(str_count(GOterm)<45, GOterm, paste0(str_sub(GOterm, 1, 42),"..."))) %>%
+  # str_sub(GOterm, 1, 10)) %>%
+  dplyr::select(-GOterm) %>%
+  column_to_rownames("GOterm_trunc") %>% 
+  as.matrix() 
+th_F_ht <- list()
+for (i in 1:3){
+  th_F_ht[[i]] <- Heatmap(topGO_MF_wide_F_th[,i][names(topGO_MF_wide_F_th[,i]) %in% names(top_genes_simp_list)], 
+                          na_col =mypal_gsea[4], col = col_ramps[[i]], 
+                          column_title = str_split(colnames(topGO_MF_wide_F_th)[i], pattern = "_", n = 3)[[1]][2],
+                          show_column_names = FALSE,
+                          row_split = top_genes_simp_list[names(top_genes_simp_list) %in% names(topGO_MF_wide_F_th[,i])], 
+                          row_title_gp = gpar(fontsize = 8),
+                          row_title_rot = 0,
+                          row_names_gp = gpar(fontsize = 6),
+                          show_heatmap_legend = FALSE,
+                          column_title_rot = 90,
+                          rect_gp = gpar(col = mypal_gsea[4], lwd = 1),
+                          cluster_rows = F)
+}
+col_ramps_I <- col_ramps[c(1,3)]
+topGO_MF_wide_I_ab <- topGO_MF_wide[topGO_MF_wide$term_ID %in% unique(unlist(top_genes_I[1:2])),c(2,15,16)] %>% 
+  arrange(ab_DE_I, ab_DS_I) %>% 
+  mutate(GOterm_trunc = 
+           if_else(str_count(GOterm)<45, GOterm, paste0(str_sub(GOterm, 1, 42),"..."))) %>%
+  # str_sub(GOterm, 1, 10)) %>%
+  dplyr::select(-GOterm) %>%
+  column_to_rownames("GOterm_trunc") %>% 
+  as.matrix() 
+ab_I_ht <- list()
+for (i in 1:2){
+  ab_I_ht[[i]] <- Heatmap(topGO_MF_wide_I_ab[,i][names(topGO_MF_wide_I_ab[,i]) %in% names(top_genes_simp_list)], 
+                          na_col =mypal_gsea[4], col = col_ramps_I[[i]], 
+                          column_title = str_split(colnames(topGO_MF_wide_I_ab)[i], pattern = "_", n = 3)[[1]][2],
+                          show_column_names = FALSE,
+                          row_split = top_genes_simp_list[names(top_genes_simp_list) %in% names(topGO_MF_wide_I_ab[,i])], 
+                          row_title_gp = gpar(fontsize = 8),
+                          row_title_rot = 0,
+                          row_names_gp = gpar(fontsize = 6),
+                          show_heatmap_legend = FALSE,
+                          column_title_rot = 90,
+                          rect_gp = gpar(col = mypal_gsea[4], lwd = 1),
+                          cluster_rows = F)
+}
+
+topGO_MF_wide_I_th <- topGO_MF_wide[topGO_MF_wide$term_ID %in% unique(unlist(top_genes_I[3:4])),c(2,17,18)] %>% 
+  arrange(th_DE_I, th_DS_I) %>% 
+  mutate(GOterm_trunc = 
+           if_else(str_count(GOterm)<45, GOterm, paste0(str_sub(GOterm, 1, 42),"..."))) %>%
+  # str_sub(GOterm, 1, 10)) %>%
+  dplyr::select(-GOterm) %>%
+  column_to_rownames("GOterm_trunc") %>% 
+  as.matrix() 
+th_I_ht <- list()
+for (i in 1:2){
+  th_I_ht[[i]] <- Heatmap(topGO_MF_wide_I_th[,i][names(topGO_MF_wide_I_th[,i]) %in% names(top_genes_simp_list)], 
+                          na_col =mypal_gsea[4], col = col_ramps_I[[i]], 
+                          column_title = str_split(colnames(topGO_MF_wide_I_th)[i], pattern = "_", n = 3)[[1]][2],
+                          show_column_names = FALSE,
+                          row_split = top_genes_simp_list[names(top_genes_simp_list) %in% names(topGO_MF_wide_I_th[,i])], 
+                          row_title_gp = gpar(fontsize = 8),
+                          row_title_rot = 0,
+                          row_names_gp = gpar(fontsize = 6),
+                          show_heatmap_legend = FALSE,
+                          column_title_rot = 90,
+                          rect_gp = gpar(col = mypal_gsea[4], lwd = 1),
+                          cluster_rows = F)
+}
+
+```
+
+
+```{r, echo = F, message = F, warning = F, fig.height = 10, fig.width = 2} 
+gsea_MFPval_plots <-  list()
+gsea_MFPval_plots[[1]] <- ab_S_ht[[1]] + ab_S_ht[[2]] + ab_S_ht[[3]]
+gsea_MFPval_plots[[2]] <- th_S_ht[[1]] + th_S_ht[[2]] + th_S_ht[[3]]
+
+gsea_MFPval_plots[[3]] <- ab_F_ht[[1]] + ab_F_ht[[2]] + ab_F_ht[[3]]
+gsea_MFPval_plots[[4]] <- th_F_ht[[1]] + th_F_ht[[2]] + th_F_ht[[3]]
+
+gsea_MFPval_plots[[5]] <-ab_I_ht[[1]] + ab_I_ht[[2]]
+gsea_MFPval_plots[[6]] <-th_I_ht[[1]] + th_I_ht[[2]]
+
+save(ab_S_ht, th_S_ht, ab_F_ht, th_F_ht, ab_I_ht, th_I_ht, file = "Data_in/B_anynana_GSEA_MF_heatmaps.Rdata")
+
+```
+
+```{r, echo = F, message=F, warning = F, fig.height = 15, fig.width = 10} 
+
+ggarrange(ggarrange(grid::grid.grabExpr(draw(gsea_MFPval_plots[[1]], ht_gap = unit(c(0.5,0.5), "mm"))), NULL, 
+                    ncol = 1, nrow = 2, heights = c(0.8,0.3)), 
+          grid::grid.grabExpr(draw(gsea_MFPval_plots[[3]], ht_gap = unit(c(0.5,0.5), "mm"))),
+          ggarrange(NULL, grid::grid.grabExpr(draw(gsea_MFPval_plots[[5]], ht_gap = unit(c(0.5,0.5), "mm"))), NULL, 
+                        ncol = 1, nrow = 3, heights = c(0.03, 0.15, 0.75)),
+          ncol = 3, nrow = 1, widths = c(1, 1, 0.9), labels = "AUTO")
+
+ggsave("Figures/FigS5_GOoverlap_abdomen_MF.pdf", height = 7.5, width = 9)
+
+ggarrange(grid::grid.grabExpr(draw(gsea_MFPval_plots[[2]], ht_gap = unit(c(0.5,0.5), "mm"))), 
+          ggarrange(grid::grid.grabExpr(draw(gsea_MFPval_plots[[4]], ht_gap = unit(c(0.5,0.5), "mm"))), NULL, 
+                        ncol = 1, nrow = 2, heights = c(0.8,0.2)),
+          ggarrange(NULL, grid::grid.grabExpr(draw(gsea_MFPval_plots[[6]], ht_gap = unit(c(0.5,0.5), "mm"))), NULL, 
+                        ncol = 1, nrow = 3, heights = c(0.03, 0.2, 0.7)),
+          ncol = 3, nrow = 1, widths = c(1, 1, 0.9), labels = "AUTO")
+
+ggsave("Figures/FigS6_GOoverlap_thorax_MF.pdf", height = 7, width = 9)
+
+```
+
+
+```{r, echo = F, message=F, warning = F} 
+
+```
