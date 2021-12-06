@@ -2,10 +2,10 @@
 #### B_anynana pipeline ####
 ############################
 
-export BA_TOOLS=/data/programs
+export BA_TOOLS=mypath/programs
 export RNA_TOOLS=/cerberus/projects/racste/HISAT2_Tutorial/student_tools
 
-export BA_HOME=/cerberus/projects/racste/B_anynana
+export BA_HOME=mypath/B_anynana
 export BA_DATA_DIR=$BA_HOME/RNA_data/raw
 export BA_DATA_TRIM=$BA_HOME/RNA_data/trim
 export BA_REFS_DIR=$BA_HOME/refs
@@ -180,4 +180,4 @@ rm *Aligned.out.bam
 #### Downstream ####
 ####################
 # edgeR: continue to rStudio and r Scripts
-# JUM: continue to JUM_full.sh
+# rMATS: continue to rMATS
